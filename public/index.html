@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>rabbitmq-websocket-simulation</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet"
+		integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+</head>
+
+<body>
+
+	<!-- BODY -->
+
+	<div class="container text-center fs-1 font-monospace text-decoration-underline">RabbitMQ and Websocket simulate
+		bananas</div>
+
+	<div class="container text-center fs-3 font-monospace mt-5 border border-end-0 border-start-0 border-top-0">
+		Click to add through the queue</div>
+
+
+	<!-- PUT THE QUEUE -->
+	<div class="container d-flex justify-content-between border border-top-0">
+		<a href="javascript:void(0)" onclick="addFruit('watermelon')">
+			<div class="p-2">
+				<img src="img/watermelon.webp" alt="" style="width:30%;">
+			</div>
+		</a>
+		<a href="javascript:void(0)" onclick="addFruit('banana')">
+			<div class="p-2"><img src="img/banana.webp" alt="" style="width:30%;"></div>
+		</a>
+		<a href="javascript:void(0)" onclick="addFruit('pear')">
+			<div class="p-2"><img src="img/pear.webp" alt="" style="width:30%;"></div>
+		</a>
+		<a href="javascript:void(0)" onclick="addFruit('apple')">
+			<div class="p-2"><img src="img/apple.webp" alt="" style="width:30%;"></div>
+		</a>
+	</div>
+
+
+	</div>
+	<div class="container border"></div>
+	<!-- PUT THE QUEUE-END -->
+
+
+
+
+	<!-- QUEUE -->
+	<div id="frQueue" class="container border border-4 border-secondary border-end-0 border-start-0 mt-5"
+		style="min-height: 35px; padding-top: 13px; padding-bottom: 13px;">
+		<!-- FRUITS IN HERE -->
+		<!-- FRUITS IN HERE -->
+		<!-- FRUITS IN HERE -->
+	</div>
+
+	<!-- COLLECT BUTTON -->
+	<div class="container text-center mt-5 font-monospace"><button onclick="frCollectBtn()">Collect</button> fruits from
+		the queue<br></div>
+
+	<!-- BUCKET -->
+	<div id="frBucket" class="container  border border-5 border-top-0  mt-5  bg-light"
+		style="width: 44%;  min-height: 300px; max-height:300px; overflow: scroll;">
+		<!-- FRUITS IN HERE -->
+		<!-- FRUITS IN HERE -->
+		<!-- FRUITS IN HERE -->
+	</div>
+
+
+	<script>
+
+		var frQueue = document.getElementById("frQueue");
+		var frBucket = document.getElementById("frBucket");
+
+
+
+		const socket = new WebSocket("ws://127.0.0.1:40123/ws");
+		console.log("Attempting Connection...");
+
+		socket.onopen = () => {
+			console.log(socket.url);
+			console.log("Successfully Connected");
+			socket.send("allFruit/")
+		};
+
+		socket.onclose = event => {
+			console.log("Socket Closed Connection: ", event);
+			socket.send("Client Closed!")
+		};
+
+		socket.onerror = error => {
+			console.log("Socket Error: ", error);
+		};
+
+		socket.onmessage = function (msgevent) {
+			var msg = msgevent.data;
+			console.log(msg);
+
+			var splittedData = msg.split("/");
+			var header = splittedData[0];
+			var content = splittedData[1];
+
+
+			if (header == "addFruit") {
+				switch (content) {
+					case "apple":
+						frQueue.insertAdjacentHTML("afterbegin", `
+			<img src="img/apple.webp" alt="" style="width:30px;">
+			`);
+						break;
+
+					case "banana":
+						frQueue.insertAdjacentHTML("afterbegin", `
+			<img src="img/banana.webp" alt="" style="width:30px;">
+			`);
+						break;
+
+					case "watermelon":
+						frQueue.insertAdjacentHTML("afterbegin", `
+			<img src="img/watermelon.webp" alt="" style="width:30px;">
+			`);
+
+						break;
+					case "pear":
+						frQueue.insertAdjacentHTML("afterbegin", `
+			<img src="img/pear.webp" alt="" style="width:30px;">
+			`);
+						break;
+
+					default:
+						conosle.log("Wrong type of content.");
+						break;
+				}
+
+			} else if (header == "collectFruit") {
+				console.log("Collect fruit triggered..");
+				let a = document.querySelectorAll("div#frQueue > img");
+				if (a.length > 0) {
+					console.log(a[a.length - 1]);
+					let b = a[a.length - 1].cloneNode(true);
+					frBucket.insertAdjacentElement("beforeend", b);
+					a[a.length - 1].remove();
+				}
+
+
+			} else if (header == "allFruit") {
+				var splittedContent;
+
+				splittedContent = content.split(",");
+				for (let i = 0; i < splittedContent.length; i++) {
+					frQueue.insertAdjacentHTML("afterbegin", `
+			<img src="img/${splittedContent[i]}.webp" alt="" style="width:30px;">
+			`);
+				}
+			}
+
+		};
+
+
+		function frCollectBtn() {
+			console.log("triggered collect btn..");
+			if (socket.readyState === WebSocket.OPEN) {
+				socket.send("collectFruit/");
+			} else {
+				console.warn("WebSocket connection is not open. Unable to send data.");
+			}
+		}
+
+		function addFruit(fruitName) {
+			if (socket.readyState === WebSocket.OPEN) {
+				// Send the data through the WebSocket connection
+				console.log("addFruit clicked", fruitName);
+				socket.send("addFruit/" + fruitName);
+			} else {
+				console.warn("WebSocket connection is not open. Unable to send data.");
+			}
+
+		}
+
+	</script>
+
+	<!-- BODY-END -->
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js"
+		integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm"
+		crossorigin="anonymous"></script>
+</body>
+
+</html>
