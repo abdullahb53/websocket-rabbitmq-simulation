@@ -97,7 +97,8 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 							if err := d.Ack(false); err != nil {
 								log.Printf("Failed to acknowledge message: %v", err)
 							}
-							cancel()
+							break breakup
+
 						case <-ctx.Done():
 
 							break breakup
@@ -114,6 +115,7 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 
 					bigPacket := ""
 					counter := 0
+					bigArray := make([][]byte, 0)
 
 				breakup:
 					for {
@@ -122,15 +124,34 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 						case d := <-msgs:
 							counter++
 							bigPacket = bigPacket + string(d.Body) + ","
-							if err := d.Nack(false, true); err != nil {
+							if err := d.Ack(false); err != nil {
 								log.Println(err)
 							}
+							bigArray = append(bigArray, d.Body)
+
 						case <-ctx.Done():
 							log.Println("bigPacket:", bigPacket)
 							if len(bigPacket) > 1 {
 								print("COUNT @@@ ::: \n")
 								print(counter, "\n")
 								err := conn.WriteMessage(messageType, []byte("allFruit/"+bigPacket[:len(bigPacket)-1]))
+
+								for i := 0; i < len(bigArray); i++ {
+									err = ch.PublishWithContext(context.Background(),
+										"",     // exchange name (empty for direct exchange)
+										q.Name, // routing key (queue name is used as the routing key for direct exchange)
+										false,  // mandatory: false (if set to true, the server will return an error if the message cannot be routed to a queue)
+										false,  // immediate: false (if set to true, the server will return an error if there are no consumers for the message)
+										amqp.Publishing{
+											ContentType: "text/plain",
+											Body:        bigArray[i],
+										},
+									)
+									if err != nil {
+										log.Fatalf("Failed to publish message: %v", err)
+									}
+
+								}
 
 								if err != nil {
 									log.Println("connWriterr:", err)
