@@ -20,9 +20,6 @@ var upgrader = websocket.Upgrader{
 func reader(conn *websocket.Conn, rmq *RabbMQ) {
 
 	ch, _ := rmq.conn.Channel()
-	// if err := ch.Qos(20, 0, false); err != nil {
-	// 	log.Println(err)
-	// }
 	defer ch.Close()
 
 	q := getRbbmQueue("fruits4", ch)
@@ -52,14 +49,10 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 		}
 
 		allMsg := string(p)
-		log.Println(strings.ContainsAny("/", allMsg), "-", allMsg)
 		if strings.ContainsAny("/", allMsg) && len(strings.Split(allMsg, "/")) == 2 {
 
 			headerMsg, contentMsg := strings.Split(allMsg, "/")[0], strings.Split(allMsg, "/")[1]
-			fmt.Println("Header: ", headerMsg)
-
 			if headerMsg == "addFruit" {
-
 				err = ch.PublishWithContext(context.Background(),
 					"",     // exchange name (empty for direct exchange)
 					q.Name, // routing key (queue name is used as the routing key for direct exchange)
@@ -70,6 +63,7 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 						Body:        []byte(contentMsg),
 					},
 				)
+
 				if err != nil {
 					log.Fatalf("Failed to publish message: %v", err)
 				}
@@ -77,8 +71,6 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 				conn.WriteMessage(messageType, []byte("addFruit/"+contentMsg))
 
 			} else if headerMsg == "collectFruit" {
-				log.Println("collect fruit golang page@@@")
-
 				go func(conn *websocket.Conn) {
 					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 					defer cancel()
@@ -86,13 +78,12 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 					for {
 						select {
 						case d := <-msgs:
-							print("@@@@@@@@@@@@@@@@@@\n")
-
 							err := conn.WriteMessage(messageType, []byte("collectFruit"))
 							if err != nil {
 								log.Println(err)
 								cancel()
 							}
+
 							// Manually acknowledge the message
 							if err := d.Ack(false); err != nil {
 								log.Printf("Failed to acknowledge message: %v", err)
@@ -100,7 +91,6 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 							break breakup
 
 						case <-ctx.Done():
-
 							break breakup
 						}
 					}
@@ -108,18 +98,17 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 				}(conn)
 
 			} else if headerMsg == "allFruit" {
-
 				go func(conn *websocket.Conn) {
 					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 					defer cancel()
-
-					bigPacket := ""
-					counter := 0
-					bigArray := make([][]byte, 0)
+					var (
+						counter   = 0                 // Fruit counter.
+						bigPacket = ""                // One fruit.
+						bigArray  = make([][]byte, 0) // All fruits storage.
+					)
 
 				breakup:
 					for {
-
 						select {
 						case d := <-msgs:
 							counter++
@@ -127,12 +116,16 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 							if err := d.Ack(false); err != nil {
 								log.Println(err)
 							}
+
 							bigArray = append(bigArray, d.Body)
 
 						case <-ctx.Done():
-							log.Println("bigPacket:", bigPacket)
 							if len(bigPacket) > 1 {
 								err := conn.WriteMessage(messageType, []byte("allFruit/"+bigPacket[:len(bigPacket)-1]))
+								if err != nil {
+									log.Println("connWriterr:", err)
+									break breakup
+								}
 
 								for i := 0; i < len(bigArray); i++ {
 									err = ch.PublishWithContext(context.Background(),
@@ -148,45 +141,33 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 									if err != nil {
 										log.Fatalf("Failed to publish message: %v", err)
 									}
-
 								}
 
-								if err != nil {
-									log.Println("connWriterr:", err)
-									break breakup
-								}
 							}
 							break breakup
-
 						}
 					}
-
 				}(conn)
-
 			} else {
 				log.Println("Wrong type of message")
 			}
-		}
 
-		// if err := conn.WriteMessage(messageType, p); err != nil {
-		// 	log.Println(err)
-		// }
-
-	}
-}
+		} // Is it the correct input expression type?
+	} // Main reader loop for WS.
+} // Reader func.
 
 type InjectRabbitToHandler func(http.ResponseWriter, *http.Request)
 
 func NewInjectRabbitToHandler(rbmqCh *RabbMQ) InjectRabbitToHandler {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		upgrader.CheckOrigin = func(r *http.Request) bool { return true }
-
 		ws, err := upgrader.Upgrade(rw, r, nil)
 		if err != nil {
 			log.Println(err)
 		}
 
 		reader(ws, rbmqCh)
+
 	}
 }
 
@@ -220,11 +201,6 @@ func newRabbMQ() *RabbMQ {
 		conn:  conn,
 		close: make(chan struct{}, 1),
 	}
-
-}
-
-func homePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Home Page")
 
 }
 
