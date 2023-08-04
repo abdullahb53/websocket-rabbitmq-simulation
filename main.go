@@ -132,8 +132,6 @@ func reader(conn *websocket.Conn, rmq *RabbMQ) {
 						case <-ctx.Done():
 							log.Println("bigPacket:", bigPacket)
 							if len(bigPacket) > 1 {
-								print("COUNT @@@ ::: \n")
-								print(counter, "\n")
 								err := conn.WriteMessage(messageType, []byte("allFruit/"+bigPacket[:len(bigPacket)-1]))
 
 								for i := 0; i < len(bigArray); i++ {
@@ -227,19 +225,15 @@ func newRabbMQ() *RabbMQ {
 
 func homePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Home Page")
+
 }
 
 func main() {
 
 	rmq := newRabbMQ()
 	defer rmq.conn.Close()
-	// ch, err := rmq.conn.Channel()
-	// if err != nil {
-	// 	log.Fatalf("connection channel error: %v", err)
-	// }
 
-	// Injection to handler with rabbitmq channel.
-	http.HandleFunc("/", homePage)
+	http.Handle("/", http.FileServer(http.Dir("./public")))
 	http.HandleFunc("/ws", NewInjectRabbitToHandler(rmq))
 	fmt.Println("Serving..")
 	log.Fatal(http.ListenAndServe(":40123", nil))
